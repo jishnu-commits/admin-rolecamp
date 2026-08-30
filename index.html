@@ -131,7 +131,7 @@
 
       if (res.status === 401 || res.status === 403) {
         sessionStorage.removeItem(STORAGE_KEY);
-        showLogin(true);
+        showLogin(true, "Access key rejected by the admin endpoint.");
         return;
       }
 
@@ -240,10 +240,12 @@
     return str.length > n ? str.slice(0, n - 1) + "…" : str;
   }
 
-  function showLogin(withError) {
+  function showLogin(withError, message) {
     document.getElementById("login-screen").style.display = "flex";
     document.getElementById("dashboard").style.display = "none";
-    document.getElementById("login-error").style.display = withError ? "block" : "none";
+    const error = document.getElementById("login-error");
+    error.textContent = message || "Incorrect key. Try again.";
+    error.style.display = withError ? "block" : "none";
   }
 
   function showDashboard() {
