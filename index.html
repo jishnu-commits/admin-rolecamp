@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Rolecamp Admin</title>
+<style>
+  :root {
+    --bg: #0a0a0b;
+    --panel: #131316;
+    --border: #232327;
+    --text: #f2f2f3;
+    --muted: #9a9aa2;
+    --accent: #6d5efc;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+  }
+  .wrap { max-width: 1000px; margin: 0 auto; padding: 32px 20px 80px; }
+  header { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 28px; }
+  h1 { font-size: 20px; margin: 0; letter-spacing: -0.01em; }
+  .sub { color: var(--muted); font-size: 13px; }
+
+  #login-screen { display: flex; align-items: center; justify-content: center; min-height: 100vh; }
+  .login-card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 28px; width: 320px; }
+  .login-card h2 { margin: 0 0 6px; font-size: 16px; }
+  .login-card p { margin: 0 0 18px; color: var(--muted); font-size: 13px; }
+  input[type="password"] {
+    width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--border);
+    background: #1a1a1e; color: var(--text); font-size: 14px; margin-bottom: 12px;
+  }
+  button {
+    width: 100%; padding: 10px 12px; border-radius: 8px; border: none;
+    background: var(--accent); color: white; font-size: 14px; font-weight: 600; cursor: pointer;
+  }
+  button:hover { opacity: 0.9; }
+  .error { color: #f87171; font-size: 13px; margin-top: 8px; display: none; }
+
+  #dashboard { display: none; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; margin-bottom: 28px; }
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 18px; }
+  .card .label { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 8px; }
+  .card .value { font-size: 30px; font-weight: 700; letter-spacing: -0.02em; }
+  .card .footnote { color: var(--muted); font-size: 12px; margin-top: 4px; }
+
+  section { margin-bottom: 28px; }
+  section h3 { font-size: 14px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 12px; font-weight: 600; }
+  table { width: 100%; border-collapse: collapse; background: var(--panel); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+  th, td { text-align: left; padding: 12px 16px; font-size: 14px; border-bottom: 1px solid var(--border); }
+  th { color: var(--muted); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.03em; }
+  tr:last-child td { border-bottom: none; }
+
+  .bar-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+  .bar-label { width: 90px; font-size: 12px; color: var(--muted); flex-shrink: 0; }
+  .bar-track { flex: 1; background: #1a1a1e; border-radius: 6px; height: 22px; position: relative; overflow: hidden; }
+  .bar-fill { background: var(--accent); height: 100%; border-radius: 6px; }
+  .bar-value { font-size: 12px; color: var(--muted); width: 30px; text-align: right; flex-shrink: 0; }
+
+  #user-search {
+    width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--border);
+    background: #1a1a1e; color: var(--text); font-size: 14px;
+  }
+  .refresh-note { color: var(--muted); font-size: 12px; margin-top: 20px; }
+  .loading { color: var(--muted); font-size: 14px; padding: 40px; text-align: center; }
+</style>
+</head>
+<body>
+
+<div id="login-screen">
+  <div class="login-card">
+    <h2>Rolecamp Admin</h2>
+    <p>Enter the admin access key to continue.</p>
+    <input type="password" id="secret-input" placeholder="Access key" />
+    <button onclick="login()">Sign in</button>
+    <div class="error" id="login-error">Incorrect key. Try again.</div>
+  </div>
+</div>
+
+<div class="wrap" id="dashboard">
+  <header>
+    <div>
+      <h1>Rolecamp Admin</h1>
+      <div class="sub">Users &amp; lesson completion</div>
+    </div>
+    <button style="width: auto; padding: 8px 14px; font-size: 13px;" onclick="loadData()">Refresh</button>
+  </header>
+
+  <div id="content">
+    <div class="loading">Loading...</div>
+  </div>
+</div>
+
+<script>
+  const FUNCTION_URL = "https://idxrxtyumrkencigrhuv.supabase.co/functions/v1/admin-stats";
+  const STORAGE_KEY = "rolecamp_admin_secret";
+
+  function login() {
+    const val = document.getElementById("secret-input").value.trim();
+    if (!val) return;
+    sessionStorage.setItem(STORAGE_KEY, val);
+    document.getElementById("login-error").style.display = "none";
+    tryLoad();
+  }
+
+  document.getElementById("secret-input").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") login();
+  });
+
+  async function loadData() {
+    const secret = sessionStorage.getItem(STORAGE_KEY);
+    const content = document.getElementById("content");
+    content.innerHTML = '<div class="loading">Loading...</div>';
+
+    try {
+      const res = await fetch(FUNCTION_URL, {
+        headers: { "x-admin-secret": secret }
+      });
+
+      const responseText = await res.text();
+      let data;
+      try {
+        data = responseText ? JSON.parse(responseText) : null;
+      } catch {
+        throw new Error(`Admin endpoint returned invalid JSON (HTTP ${res.status}).`);
+      }
+
+      if (res.status === 401 || res.status === 403) {
+        sessionStorage.removeItem(STORAGE_KEY);
+        showLogin(true);
+        return;
+      }
+
+      if (!res.ok) {
+        const message = data?.error || data?.message || `HTTP ${res.status}`;
+        throw new Error(`Admin endpoint failed: ${message}`);
+      }
+
+      if (!data || !data.userStats || !data.courseStats || !data.funnel || !data.dailySignups || !data.userList) {
+        throw new Error("Admin endpoint returned an unexpected data shape.");
+      }
+
+      render(data);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unknown error";
+      content.innerHTML = '<div class="loading">Failed to load data: ' + message.replace(/[<>&]/g, char => ({"<":"&lt;",">":"&gt;","&":"&amp;"}[char])) + '</div>';
+      console.error("[v0] Admin data load failed:", err);
+    }
+  }
+
+  function render(data) {
+    const { userStats, courseStats, funnel, dailySignups } = data;
+    const completionRate = funnel.total_users > 0
+      ? Math.round((funnel.users_with_completion / funnel.total_users) * 100)
+      : 0;
+
+    let html = "";
+
+    html += '<div class="grid">';
+    html += card("Total Users", userStats.total_users);
+    html += card("New Users (7d)", userStats.new_users_7d);
+    html += card("New Users (30d)", userStats.new_users_30d);
+    html += card("Lesson Completions", funnel.total_completions);
+    html += card("Users w/ ≥1 Completion", funnel.users_with_completion, completionRate + "% of total users");
+    html += "</div>";
+
+    html += "<section><h3>Completions by Course</h3>";
+    if (courseStats.length === 0) {
+      html += '<div class="loading">No completions yet.</div>';
+    } else {
+      const maxCompletions = Math.max(...courseStats.map(c => c.total_completions), 1);
+      html += '<div class="card">';
+      courseStats.forEach(c => {
+        const pct = (c.total_completions / maxCompletions) * 100;
+        html += '<div class="bar-row">';
+        html += '<div class="bar-label" title="' + c.course_slug + '">' + truncate(c.course_slug, 14) + '</div>';
+        html += '<div class="bar-track"><div class="bar-fill" style="width:' + pct + '%"></div></div>';
+        html += '<div class="bar-value">' + c.total_completions + '</div>';
+        html += '</div>';
+      });
+      html += '</div>';
+    }
+    html += "</section>";
+
+    html += "<section><h3>Daily Signups</h3>";
+    if (dailySignups.length === 0) {
+      html += '<div class="loading">No signup data yet.</div>';
+    } else {
+      const maxSignups = Math.max(...dailySignups.map(d => d.signups), 1);
+      html += '<div class="card">';
+      dailySignups.slice(-14).forEach(d => {
+        const pct = (d.signups / maxSignups) * 100;
+        const dateLabel = new Date(d.day).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+        html += '<div class="bar-row">';
+        html += '<div class="bar-label">' + dateLabel + '</div>';
+        html += '<div class="bar-track"><div class="bar-fill" style="width:' + pct + '%"></div></div>';
+        html += '<div class="bar-value">' + d.signups + '</div>';
+        html += '</div>';
+      });
+      html += '</div>';
+    }
+    html += "</section>";
+
+    html += '<section><h3>Users (' + data.userList.length + ')</h3>';
+    html += '<input type="text" id="user-search" placeholder="Search by name or email..." style="margin-bottom:12px;" oninput="filterUsers()" />';
+    html += '<table id="user-table"><thead><tr><th>Name</th><th>Email</th><th>Joined</th><th>Lessons Completed</th><th>Last Completed</th></tr></thead><tbody>';
+    data.userList.forEach(u => {
+      html += '<tr class="user-row" data-search="' + (u.name || "").toLowerCase() + ' ' + (u.email || "").toLowerCase() + '">';
+      html += '<td>' + (u.name || "—") + '</td>';
+      html += '<td>' + (u.email || "—") + '</td>';
+      html += '<td>' + new Date(u.created_at).toLocaleDateString() + '</td>';
+      html += '<td>' + u.lessons_completed + '</td>';
+      html += '<td>' + (u.last_completed_at ? new Date(u.last_completed_at).toLocaleDateString() : "—") + '</td>';
+      html += '</tr>';
+    });
+    html += '</tbody></table></section>';
+
+    html += '<div class="refresh-note">Last loaded ' + new Date().toLocaleString() + '</div>';
+
+    document.getElementById("content").innerHTML = html;
+  }
+
+  function filterUsers() {
+    const q = document.getElementById("user-search").value.toLowerCase();
+    document.querySelectorAll(".user-row").forEach(row => {
+      row.style.display = row.dataset.search.includes(q) ? "" : "none";
+    });
+  }
+
+  function card(label, value, footnote) {
+    return '<div class="card"><div class="label">' + label + '</div><div class="value">' + value + '</div>' +
+      (footnote ? '<div class="footnote">' + footnote + '</div>' : '') + '</div>';
+  }
+
+  function truncate(str, n) {
+    return str.length > n ? str.slice(0, n - 1) + "…" : str;
+  }
+
+  function showLogin(withError) {
+    document.getElementById("login-screen").style.display = "flex";
+    document.getElementById("dashboard").style.display = "none";
+    document.getElementById("login-error").style.display = withError ? "block" : "none";
+  }
+
+  function showDashboard() {
+    document.getElementById("login-screen").style.display = "none";
+    document.getElementById("dashboard").style.display = "block";
+  }
+
+  function tryLoad() {
+    const secret = sessionStorage.getItem(STORAGE_KEY);
+    if (!secret) {
+      showLogin(false);
+      return;
+    }
+    showDashboard();
+    loadData();
+  }
+
+  tryLoad();
+</script>
+
+</body>
+</html>
